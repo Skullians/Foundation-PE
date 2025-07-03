@@ -1658,30 +1658,6 @@ public final class HookManager {
 		packetEventsHook.sendPacket(player, packetWrapper);
 	}
 
-	/**
-	 * Converts a {@link com.github.retrooper.packetevents.protocol.item.ItemStack} from PacketEvents into a Bukkit {@link ItemStack}.
-	 *
-	 * @param itemStack The {@link com.github.retrooper.packetevents.protocol.item.ItemStack} to convert.
-	 * @return The converted Bukkit {@link ItemStack}.
-	 */
-	public static ItemStack toBukkitItemStack(Object itemStack) {
-		ValidCore.checkBoolean(isPacketEventsLoaded(), "Converting ItemStacks requires PacketEVents to be installed and loaded");
-
-		return (ItemStack) packetEventsHook.toBukkitItemStack(itemStack);
-	}
-
-	/**
-	 * Converts a {@link ItemStack} from Bukkit into a PacketEvents {@link com.github.retrooper.packetevents.protocol.item.ItemStack}.
-	 *
-	 * @param itemStack The {@link ItemStack} to convert.
-	 * @return The converted PacketEvents {@link com.github.retrooper.packetevents.protocol.item.ItemStack}.
-	 */
-	public static Object fromBukkitItemStack(ItemStack itemStack) {
-		ValidCore.checkBoolean(isPacketEventsLoaded(), "Converting ItemStacks requires PacketEVents to be installed and loaded");
-
-		return packetEventsHook.fromBukkitItemStack(itemStack);
-	}
-
 	// ------------------------------------------------------------------------------------------------------------
 	// LWC
 	// ------------------------------------------------------------------------------------------------------------

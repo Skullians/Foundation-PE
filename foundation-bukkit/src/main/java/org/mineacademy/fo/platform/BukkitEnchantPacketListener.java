@@ -9,8 +9,8 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientCr
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerMerchantOffers;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.MerchantRecipe;
 import org.mineacademy.fo.MinecraftVersion;
 import org.mineacademy.fo.MinecraftVersion.V;
 import org.mineacademy.fo.annotation.AutoRegister;
@@ -23,6 +23,9 @@ import org.mineacademy.fo.remain.CompMaterial;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import static io.github.retrooper.packetevents.util.SpigotConversionUtil.fromBukkitItemStack;
+import static io.github.retrooper.packetevents.util.SpigotConversionUtil.toBukkitItemStack;
 
 /**
  * Listens to and intercepts packets using Foundation inbuilt features
@@ -50,7 +53,7 @@ final class BukkitEnchantPacketListener extends PacketListener {
 		//   BlackNova I  (actual lore of the item)
 		this.addReceivingListener(PacketType.Play.Client.CREATIVE_INVENTORY_ACTION, event -> {
 			final WrapperPlayClientCreativeInventoryAction packet = new WrapperPlayClientCreativeInventoryAction(event);
-			final ItemStack item = (ItemStack) HookManager.toBukkitItemStack(packet.getItemStack());
+			final ItemStack item = toBukkitItemStack(packet.getItemStack());
 
 			if (item != null && !CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
 				final ItemStack newItem = SimpleEnchantment.removeEnchantmentLores(item);
@@ -58,21 +61,21 @@ final class BukkitEnchantPacketListener extends PacketListener {
 				// I don't like this casting; however, we have the utility methods in HookManager which have the checks for PacketEvents.
 				// I mainly created them because of converting List<ItemStack>s, but wanted to stick with conventions.
 				if (newItem != null)
-					packet.setItemStack((com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(newItem));
+					packet.setItemStack(fromBukkitItemStack(newItem));
 			}
 		});
 
 		// Auto placement of our lore when items are custom enchanted
 		this.addSendingListener(PacketType.Play.Server.SET_SLOT, event -> {
 			final WrapperPlayServerSetSlot packet = new WrapperPlayServerSetSlot(event);
-			ItemStack item = (ItemStack) HookManager.toBukkitItemStack(packet.getItem());
+			ItemStack item = toBukkitItemStack(packet.getItem());
 
 			if (item != null && !CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
 				item = SimpleEnchantment.addEnchantmentLores(item);
 
 				// Write the item
 				if (item != null)
-					packet.setItem((com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(item));
+					packet.setItem(fromBukkitItemStack(item));
 			}
 		});
 
@@ -81,7 +84,7 @@ final class BukkitEnchantPacketListener extends PacketListener {
 
 			// for older versions, this is not needed because I believe they use an array
 			final List<ItemStack> itemStacks = packet.getItems().stream()
-					.map(HookManager::toBukkitItemStack)
+					.map(SpigotConversionUtil::toBukkitItemStack)
 					.collect(Collectors.toList());
 			if (itemStacks != null) {
 				boolean changed = false;
@@ -101,7 +104,7 @@ final class BukkitEnchantPacketListener extends PacketListener {
 				}
 				if (changed)
 					packet.setItems(itemStacks.stream()
-							.map(item -> (com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(item))
+							.map(SpigotConversionUtil::fromBukkitItemStack)
 							.collect(Collectors.toList()));
 			}
 		});
@@ -115,7 +118,7 @@ final class BukkitEnchantPacketListener extends PacketListener {
 
 				for (int i = 0; i < offers.size(); i++) {
 					final MerchantOffer offer = offers.get(i);
-					ItemStack item = HookManager.toBukkitItemStack(offer.getOutputItem());
+					ItemStack item = toBukkitItemStack(offer.getOutputItem());
 
 					if (!CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
 						item = SimpleEnchantment.addEnchantmentLores(item);
@@ -123,7 +126,7 @@ final class BukkitEnchantPacketListener extends PacketListener {
 						if (item == null)
 							continue;
 
-						offer.setOutputItem((com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(item));
+						offer.setOutputItem(fromBukkitItemStack(item));
 						offers.set(i, offer);
 
 						changed = true;
