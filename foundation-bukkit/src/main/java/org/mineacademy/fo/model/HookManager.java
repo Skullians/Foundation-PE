@@ -15,9 +15,18 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.PacketEventsAPI;
+import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.wrapper.PacketWrapper;
+import com.sun.istack.NotNull;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
@@ -26,6 +35,7 @@ import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.permissions.Permissible;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -51,10 +61,6 @@ import com.Zrips.CMI.Containers.CMIUser;
 import com.Zrips.CMI.Modules.TabList.TabListManager;
 import com.bekvon.bukkit.residence.Residence;
 import com.bekvon.bukkit.residence.protection.ClaimedResidence;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.ProtocolManager;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketContainer;
 import com.earth2me.essentials.CommandSource;
 import com.earth2me.essentials.Essentials;
 import com.earth2me.essentials.IUser;
@@ -131,7 +137,7 @@ public final class HookManager {
 	private static PlaceholderAPIHook placeholderAPIHook;
 	private static PlotSquaredHook plotSquaredHook;
 	private static PremiumVanishHook premiumVanishHook;
-	private static ProtocolLibHook protocolLibHook;
+	private static PacketEventsHook packetEventsHook;
 	private static ResidenceHook residenceHook;
 	private static TownyHook townyHook;
 	private static VaultHook vaultHook;
@@ -264,19 +270,19 @@ public final class HookManager {
 		if (Platform.isPluginInstalled("PremiumVanish"))
 			premiumVanishHook = new PremiumVanishHook();
 
-		if (Platform.isPluginInstalled("ProtocolLib"))
+		if (Platform.isPluginInstalled("PacketEvents"))
 
 			// Also check if the library is loaded properly.
 			try {
-				Class.forName("com.comphenix.protocol.wrappers.WrappedChatComponent");
-				Class.forName("com.comphenix.protocol.ProtocolLibrary");
+				Class.forName("com.github.retrooper.packetevents.PacketEvents");
+				Class.forName("com.github.retrooper.packetevents.PacketEventsAPI");
 
-				protocolLibHook = new ProtocolLibHook();
+				packetEventsHook = new PacketEventsHook();
 
 			} catch (final Throwable t) {
-				protocolLibHook = null;
+				packetEventsHook = null;
 
-				CommonCore.warning("You are running an old and unsupported version of ProtocolLib, please update it. The plugin will continue to function without hooking into it.");
+				CommonCore.warning("Could not hook into PacketEvents. Ensure it has loaded and you are running a supported Minecraft version.");
 			}
 
 		if (Platform.isPluginInstalled("Residence"))
@@ -550,7 +556,7 @@ public final class HookManager {
 	}
 
 	/**
-	 * Is ProtocolLib loaded?
+	 * Is PacketEvents loaded?
 	 * <p>
 	 * This will not only check if the plugin is in the plugins folder, but
 	 * also if it's correctly loaded and working. (Should detect the plugin's
@@ -558,8 +564,8 @@ public final class HookManager {
 	 *
 	 * @return
 	 */
-	public static boolean isProtocolLibLoaded() {
-		return protocolLibHook != null;
+	public static boolean isPacketEventsLoaded() {
+		return packetEventsHook != null;
 	}
 
 	/**
@@ -1611,45 +1617,69 @@ public final class HookManager {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
-	// ProtocolLib
+	// PacketEvents
 	// ------------------------------------------------------------------------------------------------------------
 
 	/**
-	 * Adds a {@link PacketAdapter} packet listener to ProtocolLib.
+	 * Adds a {@link PacketListener} packet listener to PacketEvents.
 	 * <p>
 	 * If the plugin is missing, an error will be thrown.
 	 *
-	 * @param adapter the adapter to add.
+	 * @param listener the listener to add.
 	 */
-	public static void addPacketListener(/* Uses an Object to prevent errors if the plugin is not installed. */final Object adapter) {
-		ValidCore.checkBoolean(isProtocolLibLoaded(), "Cannot add packet listeners if ProtocolLib isn't installed");
+	public static void addPacketListener(/* Uses an Object to prevent errors if the plugin is not installed. */final Object listener) {
+		ValidCore.checkBoolean(isPacketEventsLoaded(), "Cannot add packet listeners if PacketEvents isn't installed");
 
-		protocolLibHook.addPacketListener(adapter);
+		packetEventsHook.addPacketListener(listener);
 	}
 
 	/**
-	 * Removes a {@link PacketAdapter} packet listener from ProtocolLib.
+	 * Removes a {@link PacketListener} packet listener from PacketEvents.
 	 * <p>
 	 * If the plugin is missing, or the listener hasn't been registered, an error will be thrown
 	 *
-	 * @param adapter the adapter to remove.
+	 * @param listener the listener to remove.
 	 */
-	public static void removePacketListener(final Object adapter) {
-		ValidCore.checkBoolean(isProtocolLibLoaded(), "Cannot remove packet listeners if ProtocolLib isn't installed");
+	public static void removePacketListener(final Object listener) {
+		ValidCore.checkBoolean(isPacketEventsLoaded(), "Cannot remove packet listeners if PacketEvents isn't installed");
 
-		protocolLibHook.removePacketListener(adapter);
+		packetEventsHook.removePacketListener(listener);
 	}
 
 	/**
-	 * Send a {@link PacketContainer} to the given player.
+	 * Send a {@link PacketWrapper} or ByteBuf to the given player.
 	 *
-	 * @param player          the player to send the packet container to.
-	 * @param packetContainer the packet container to send.
+	 * @param player        the player to send the packet container to.
+	 * @param packetWrapper the packet wrapper to send.
 	 */
-	public static void sendPacket(final Player player, final Object packetContainer) {
-		ValidCore.checkBoolean(isProtocolLibLoaded(), "Sending packets requires ProtocolLib to be installed and loaded");
+	public static void sendPacket(final Player player, final Object packetWrapper) {
+		ValidCore.checkBoolean(isPacketEventsLoaded(), "Sending packets requires PacketEvents to be installed and loaded");
 
-		protocolLibHook.sendPacket(player, packetContainer);
+		packetEventsHook.sendPacket(player, packetWrapper);
+	}
+
+	/**
+	 * Converts a {@link com.github.retrooper.packetevents.protocol.item.ItemStack} from PacketEvents into a Bukkit {@link ItemStack}.
+	 *
+	 * @param itemStack The {@link com.github.retrooper.packetevents.protocol.item.ItemStack} to convert.
+	 * @return The converted Bukkit {@link ItemStack}.
+	 */
+	public static ItemStack toBukkitItemStack(Object itemStack) {
+		ValidCore.checkBoolean(isPacketEventsLoaded(), "Converting ItemStacks requires PacketEVents to be installed and loaded");
+
+		return (ItemStack) packetEventsHook.toBukkitItemStack(itemStack);
+	}
+
+	/**
+	 * Converts a {@link ItemStack} from Bukkit into a PacketEvents {@link com.github.retrooper.packetevents.protocol.item.ItemStack}.
+	 *
+	 * @param itemStack The {@link ItemStack} to convert.
+	 * @return The converted PacketEvents {@link com.github.retrooper.packetevents.protocol.item.ItemStack}.
+	 */
+	public static Object fromBukkitItemStack(ItemStack itemStack) {
+		ValidCore.checkBoolean(isPacketEventsLoaded(), "Converting ItemStacks requires PacketEVents to be installed and loaded");
+
+		return packetEventsHook.fromBukkitItemStack(itemStack);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -2297,28 +2327,33 @@ class TownyHook {
 	}
 }
 
-class ProtocolLibHook {
+class PacketEventsHook {
 
-	private final ProtocolManager manager;
+	private final PacketEventsAPI<?> api;
 	private final Set<Object> registeredListeners = new HashSet<>();
 
-	ProtocolLibHook() {
-		this.manager = ProtocolLibrary.getProtocolManager();
+	PacketEventsHook() {
+		this.api = PacketEvents.getAPI();
 
-		if (this.manager == null)
-			CommonCore.warning("Unable to get protocol manager. Ensure ProtocolLib threw no errors in your startup log and is compatible with your server version. "
-					+ "If you're a developer, place ProtocolLib to softDepend in plugin.yml. Packet features won't function.");
+		if (this.api == null)
+			CommonCore.warning("Unable to get the PacketEvents API instance. Ensure PacketEvents threw no errors in your startup log and is compatible with your server version. "
+					+ "If you're a developer, place PacketEvents to softDepend in plugin.yml. Packet features won't function.");
 	}
 
-	final void addPacketListener(final Object listener) {
-		ValidCore.checkBoolean(listener instanceof com.comphenix.protocol.events.PacketListener, "Listener must extend or implements com.comphenix.protocol.events.PacketListener or PacketAdapter");
+	final void addPacketListener(final Object listener, final PacketListenerPriority priority) {
+		ValidCore.checkBoolean(listener instanceof PacketListener, "listener must implement com.github.retrooper.packetevents.event.PacketListener");
 
-		if (this.manager != null) {
+		if (this.api != null) {
 			try {
-				this.manager.addPacketListener((com.comphenix.protocol.events.PacketListener) listener);
-
+				// I'm casting here to maintain parity with the previous implementation (for ProtocolLib, now PacketEvents).
+				// Developers can supply a class object, and Foundation checks that it implements PacketListener.
+				// Technically, we could make the method field accept PacketListener directly, but this isn't my code.
+				// Given, kangarko said we can afford breaking API changes as v7 isn't "fully" released yet, though I'd like to maintain
+				// parity where possible. Let me know if you want this changed though, Kangarko!
+				// (I still haven't figured out if I should call him kangarko or Matej :/)
+				this.api.getEventManager().registerListener((PacketListener) listener, priority);
 			} catch (final Throwable t) {
-				CommonCore.error(t, "Failed to register ProtocolLib packet listener! Ensure you have the latest ProtocolLib. If you reloaded, try a fresh startup (some ProtocolLib esp. for 1.8.8 fails on reload).");
+				CommonCore.error(t, "Failed to register PacketEvents packet listener! Ensure you have the latest version of PacketEvents. If you reloaded, try to restart your server.");
 
 				return;
 			}
@@ -2327,17 +2362,22 @@ class ProtocolLibHook {
 		}
 	}
 
-	final void removePacketListener(final Object listener) {
-		ValidCore.checkBoolean(listener instanceof com.comphenix.protocol.events.PacketListener, "Listener must extend or implements com.comphenix.protocol.events.PacketListener or PacketAdapter");
+	// "parity" with the old API. Sure, we can change the API a bit, but sometimes people don't want to specify the listener priority every time.
+	// This method existed in the ProtocolLibHook class, so we keep it here too.
+	final void addPacketListener(final Object listener) {
+		this.addPacketListener(listener, PacketListenerPriority.NORMAL);
+	}
 
-		if (this.manager != null) {
-			ValidCore.checkBoolean(this.registeredListeners.contains(listener), "Listener must already be registered with ProtocolLib.");
+	final void removePacketListener(final Object listener) {
+		ValidCore.checkBoolean(listener instanceof PacketListener, "listener must implement com.github.retrooper.packetevents.event.PacketListener");
+
+		if (this.api != null) {
+			ValidCore.checkBoolean(this.registeredListeners.contains(listener), "listener must already be registered with PacketEvents.");
 
 			try {
-				this.manager.removePacketListener((com.comphenix.protocol.events.PacketListener) listener);
-
+				this.api.getEventManager().unregisterListener((PacketListenerCommon) listener);
 			} catch (final Throwable t) {
-				CommonCore.error(t, "Failed to unregister ProtocolLib packet listener!");
+				CommonCore.error(t, "Failed to unregister PacketEvents packet listener!");
 
 				return;
 			}
@@ -2346,31 +2386,39 @@ class ProtocolLibHook {
 		}
 	}
 
-	final void sendPacket(final PacketContainer packet) {
-		for (final Player player : Remain.getOnlinePlayers())
+	final void sendPacket(final PacketWrapper<?> packet) {
+		for (final Player player : Remain.getOnlinePlayers()) {
 			this.sendPacket(player, packet);
-	}
-
-	final void sendPacket(final Player player, final Object packet) {
-		ValidCore.checkNotNull(player);
-		ValidCore.checkBoolean(packet instanceof PacketContainer, "Packet must be instance of PacketContainer from ProtocolLib");
-
-		if (this.manager != null)
-			try {
-				this.manager.sendServerPacket(player, (PacketContainer) packet);
-
-			} catch (final Exception e) {
-				CommonCore.error(e, "Failed to send " + ((PacketContainer) packet).getType() + " packet to " + player.getName());
-			}
-	}
-
-	final boolean isTemporaryPlayer(final Player player) {
-		try {
-			return player != null && player.getClass().getSimpleName().contains("TemporaryPlayer"); // Solves compatibiltiy issues
-
-		} catch (final NoClassDefFoundError err) {
-			return false;
 		}
+	}
+
+	final void sendPacket(@NotNull final Player player, final Object packet) {
+		ValidCore.checkNotNull(player);
+		ValidCore.checkBoolean(packet instanceof PacketWrapper, "Packet must be instance of PacketWrapper from PacketEvents");
+
+		PacketWrapper<?> packetWrapper = (PacketWrapper<?>) packet;
+
+		if (this.api != null) {
+			try {
+				this.api.getPlayerManager().sendPacket(player, packetWrapper);
+			} catch (final Exception e) {
+				CommonCore.error(e, "Failed to send " + packetWrapper.getPacketTypeData().getPacketType().getName() + " packet to " + player.getName());
+			}
+		}
+	}
+
+	final Object toBukkitItemStack(Object itemStack) {
+		ValidCore.checkNotNull(itemStack);
+		ValidCore.checkBoolean(itemStack instanceof com.github.retrooper.packetevents.protocol.item.ItemStack, "ItemStack must be an instance of ItemStack from PacketEvents");
+
+		return SpigotConversionUtil.toBukkitItemStack((com.github.retrooper.packetevents.protocol.item.ItemStack) itemStack);
+	}
+
+	final Object fromBukkitItemStack(Object itemStack) {
+		ValidCore.checkNotNull(itemStack);
+		ValidCore.checkBoolean(itemStack instanceof ItemStack, "ItemStack must be an instance of a bukkit ItemStack");
+
+		return SpigotConversionUtil.fromBukkitItemStack((ItemStack) itemStack);
 	}
 }
 

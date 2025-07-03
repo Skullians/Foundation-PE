@@ -294,10 +294,10 @@ public abstract class BukkitPlugin extends JavaPlugin implements Listener, Found
 						return true;
 					}
 
-					if (PacketListener.class.isAssignableFrom(clazz) && !HookManager.isProtocolLibLoaded()) {
+					if (PacketListener.class.isAssignableFrom(clazz) && !HookManager.isPacketEventsLoaded()) {
 						if (printWarnings && !clazz.equals(BukkitPacketListener.class)) {
 							CommonCore.warning("**** WARNING ****");
-							CommonCore.warning("The following class requires ProtocolLib and won't be registered: " + clazz.getSimpleName()
+							CommonCore.warning("The following class requires PacketEvents and won't be registered: " + clazz.getSimpleName()
 									+ ". To hide this message, put @AutoRegister(hideIncompatibilityWarnings=true) over the class.");
 						}
 
@@ -364,10 +364,10 @@ public abstract class BukkitPlugin extends JavaPlugin implements Listener, Found
 
 							BukkitPlugin.this.registerEvents(SimpleEnchantment.Listener.getInstance());
 
-							if (Bukkit.getPluginManager().getPlugin("ProtocolLib") != null)
+							if (Bukkit.getPluginManager().getPlugin("PacketEvents") != null)
 								BukkitEnchantPacketListener.getInstance().onRegister();
 							else
-								CommonCore.warning("Custom enchantments require ProtocolLib for lore to be added properly.");
+								CommonCore.warning("Custom enchantments require PacketEvents for lore to be added properly.");
 						}
 
 						return true;

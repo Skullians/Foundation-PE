@@ -1,54 +1,54 @@
 package org.mineacademy.fo.model;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketEvent;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketReceiveEvent;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.chat.ChatTypes;
+import com.github.retrooper.packetevents.protocol.chat.message.ChatMessage;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.packettype.PacketTypeCommon;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChatMessage;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSystemChatMessage;
+import com.github.retrooper.packetevents.wrapper.status.server.WrapperStatusServerResponse;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 import org.mineacademy.fo.MinecraftVersion;
 import org.mineacademy.fo.MinecraftVersion.V;
 import org.mineacademy.fo.exception.EventHandledException;
 import org.mineacademy.fo.exception.FoException;
 import org.mineacademy.fo.platform.BukkitPlugin;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.events.ListenerPriority;
-import com.comphenix.protocol.events.PacketAdapter;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.events.PacketEvent;
-import com.comphenix.protocol.reflect.StructureModifier;
-import com.comphenix.protocol.wrappers.EnumWrappers.ChatType;
-import com.comphenix.protocol.wrappers.WrappedChatComponent;
-import com.comphenix.protocol.wrappers.WrappedGameProfile;
-import com.comphenix.protocol.wrappers.WrappedServerPing;
-
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.bungeecord.BungeeComponentSerializer;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
-import net.md_5.bungee.api.chat.BaseComponent;
 
 /**
- * Extend this class to listen to packets. Requires ProtocolLib.
+ * Extend this class to listen to packets. Requires PacketEvents.
  */
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public abstract class PacketListener {
 
 	/**
-	 * Called automatically when you use \@AutoRegister, inject
+	 * Called automatically when you use {@link org.mineacademy.fo.annotation.AutoRegister}, inject
 	 * your packet listeners here.
 	 */
 	public abstract void onRegister();
 
 	/**
-	 * A convenience shortcut to add packet listener
+	 * A convenience shortcut to add a packet listener
 	 *
-	 * @param adapter
+	 * @param adapter The packet adapter instance to add.
 	 */
 	protected void addPacketListener(final SimpleAdapter adapter) {
 		HookManager.addPacketListener(adapter);
@@ -60,31 +60,31 @@ public abstract class PacketListener {
 
 	/**
 	 * A convenience method for listening to Client>Server packets of the given type.
+	 * By default, the listener is registered with {@link PacketListenerPriority#NORMAL}.
 	 *
-	 * @param type
-	 * @param consumer
+	 * @param type The packet type to exclusively listen for, e.g. {@code PacketType.Play.Client.CHAT_COMMAND}.
+	 * @param consumer The consumer to call when the packet is received.
 	 */
-	protected void addReceivingListener(final PacketType type, final Consumer<PacketEvent> consumer) {
-		this.addReceivingListener(ListenerPriority.NORMAL, type, consumer);
+	protected void addReceivingListener(final PacketTypeCommon type, final Consumer<PacketReceiveEvent> consumer) {
+		this.addReceivingListener(PacketListenerPriority.NORMAL, type, consumer);
 	}
 
 	/**
 	 * A convenience method for listening to Client>Server packets of the given type and priority.
 	 *
-	 * @param priority
-	 * @param type
-	 * @param consumer
+	 * @param priority The priority of the listener, see {@link PacketListenerPriority}.
+	 * @param type The packet type to exclusively listen for, e.g. {@code PacketType.Play.Client.CHAT_COMMAND}.
+	 * @param consumer The consumer to call when the packet is received.
 	 */
-	protected void addReceivingListener(final ListenerPriority priority, final PacketType type, final Consumer<PacketEvent> consumer) {
+	protected void addReceivingListener(final PacketListenerPriority priority, final PacketTypeCommon type, final Consumer<PacketReceiveEvent> consumer) {
 		this.addPacketListener(new SimpleAdapter(priority, type) {
 
 			/**
-			 * @see com.comphenix.protocol.events.PacketAdapter#onPacketReceiving(com.comphenix.protocol.events.PacketEvent)
+			 * @see com.github.retrooper.packetevents.event.PacketListener#onPacketReceive(PacketReceiveEvent)
 			 */
 			@Override
-			public void onPacketReceiving(final PacketEvent event) {
-
-				if (event.getPlayer() != null)
+			public void onPacketReceiving(final PacketReceiveEvent event) {
+				if (event.getPlayer() != null) // especially during login/config phase, player may often be null.
 					consumer.accept(event);
 			}
 		});
@@ -97,36 +97,35 @@ public abstract class PacketListener {
 	/**
 	 * A convenience method for listening to Server>Client packets of the given type.
 	 *
-	 * @param type
-	 * @param consumer
+	 * @param type The packet type to exclusively listen for, e.g. {@code PacketType.Play.Server.CHAT_MESSAGE}.
+	 * @param consumer The consumer to call when the packet is sent.
 	 */
-	protected void addSendingListener(final PacketType type, final Consumer<PacketEvent> consumer) {
-		this.addSendingListener(ListenerPriority.NORMAL, type, consumer);
+	protected void addSendingListener(final PacketTypeCommon type, final Consumer<PacketSendEvent> consumer) {
+		this.addSendingListener(PacketListenerPriority.NORMAL, type, consumer);
 	}
 
 	/**
 	 * A convenience method for listening to Server>Client packets of the given type and priority.
 	 *
-	 * @param priority
-	 * @param type
-	 * @param consumer
+	 * @param priority The priority of the listener, see {@link PacketListenerPriority}.
+	 * @param type The packet type to exclusively listen for, e.g. {@code PacketType.Play.Server.CHAT_MESSAGE}.
+	 * @param consumer The consumer to call when the packet is sent.
 	 */
-	protected void addSendingListener(final ListenerPriority priority, final PacketType type, final Consumer<PacketEvent> consumer) {
+	protected void addSendingListener(final PacketListenerPriority priority, final PacketTypeCommon type, final Consumer<PacketSendEvent> consumer) {
 		this.addPacketListener(new SimpleAdapter(priority, type) {
 
 			/**
-			 * @see com.comphenix.protocol.events.PacketAdapter#onPacketReceiving(com.comphenix.protocol.events.PacketEvent)
+			 * @see com.github.retrooper.packetevents.event.PacketListener#onPacketSend(PacketSendEvent)
 			 */
 			@Override
-			public void onPacketSending(final PacketEvent event) {
-
+			public void onPacketSend(@NotNull final PacketSendEvent event) {
 				if (event.getPlayer() != null)
 					consumer.accept(event);
 			}
 
 			@Override
-			public void onPacketReceiving(final PacketEvent event) {
-				if (type == PacketType.Play.Server.CHAT || type == PacketType.Play.Client.CHAT) {
+			public void onPacketReceive(@NotNull final PacketReceiveEvent event) {
+				if (type == PacketType.Play.Server.CHAT_MESSAGE || type == PacketType.Play.Client.CHAT_MESSAGE) { // todo, check
 					// Packet can be both sided
 				} else
 					super.onPacketReceiving(event);
@@ -136,32 +135,43 @@ public abstract class PacketListener {
 
 	/**
 	 * Sets the hoverable text in the server's menu
-	 * To use this, create a new addSendingListener for PacketType.Status.Server.SERVER_INFO
-	 * and get the {@link WrappedServerPing} from event.getPacket().getServerPings().read(0)
-	 * then finallly call WrappedServerPing#setPlayers method
+	 * To use this, create a new addSendingListener for PacketType.Status.Server.RESPONSE
+	 * and get the {@link JsonObject} from {@link WrapperStatusServerResponse#getComponent()}.
+	 * You can then get the "players" JsonObject by <code>JsonObject.getAsJsonObject("players")</code>,
+	 * and can subsequently call <code>JsonObject.add("sample", hoverTextArray)</code>
+	 * <p>
+	 * <pre>
+	 * {@code
+	 * @Override
+	 * public void onPacketSend(final PacketSendEvent event) {
+	 *		WrapperStatusServerResponse response = new WrapperStatusServerResponse(event);
+	 *      JsonObject component = response.getComponent();
 	 *
-	 * @param hoverTexts
+	 *		// We prepare the hover text array.
+	 *		JsonArray hoverText = compileHoverText("&cVery cool text!", "&aAnother line of text");
+	 *		component.getAsJsonObject("players").add("sample", hoverText); // We replace the "sample" of players with our hover text.
+	 *
+	 *		response.setComponent(component);
+	 * }
+	 * }
+	 * </pre>
+	 *
+	 * @param hoverTexts The text lines to be displayed when hovering over the text in the server's menu.
 	 */
-	protected List<WrappedGameProfile> compileHoverText(final String... hoverTexts) {
-		final List<WrappedGameProfile> profiles = new ArrayList<>();
-
-		int count = 0;
+	protected JsonArray compileHoverText(final String... hoverTexts) {
+		JsonArray array = new JsonArray();
 
 		for (final String hoverText : hoverTexts) {
+			final JsonObject sample = new JsonObject();
+
 			final String colorized = CompChatColor.translateColorCodes(hoverText);
-			WrappedGameProfile profile;
+			sample.addProperty("name", colorized);
+			sample.addProperty("id", UUID.randomUUID().toString());
 
-			try {
-				profile = new WrappedGameProfile(UUID.randomUUID(), colorized);
-
-			} catch (final Throwable t) {
-				profile = new WrappedGameProfile(String.valueOf(count++), colorized);
-			}
-
-			profiles.add(profile);
+			array.add(sample);
 		}
 
-		return profiles;
+		return array;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -179,104 +189,52 @@ public abstract class PacketListener {
 		private final Set<String> processedPlayers = new HashSet<>();
 
 		/**
-		 * Cached flags for performance purposes.
-		 */
-		private int actionBarMode = -1;
-		private Boolean hasAdventure = null;
-		private Boolean hasBungee = null;
-		private Boolean hasIChatBase = null;
-
-		/**
-		 * Create new chat listener
+		 * Create a new chat listener
 		 */
 		public SimpleChatAdapter() {
-			super(ListenerPriority.HIGHEST, MinecraftVersion.atLeast(V.v1_19) ? PacketType.Play.Server.SYSTEM_CHAT : PacketType.Play.Server.CHAT);
+			super(PacketListenerPriority.HIGHEST, MinecraftVersion.atLeast(V.v1_19) ? PacketType.Play.Server.SYSTEM_CHAT_MESSAGE : PacketType.Play.Server.CHAT_MESSAGE); // todo check
 		}
 
 		@Override
-		public void onPacketSending(final PacketEvent event) {
+		public void onPacketSend(final PacketSendEvent event) {
 			final Player player = event.getPlayer();
-
-			if (player == null)
-				return;
-
-			final String playerName = event.getPlayer().getName();
-			final PacketContainer packet = event.getPacket();
+			final String playerName = player.getName();
 
 			// Ignore dummy instances and disabled plugin or processed players
 			if (!player.isOnline() || !BukkitPlugin.getInstance().isEnabled() || this.processedPlayers.contains(playerName))
 				return;
 
-			// Ignore action bar messages
-			if (this.actionBarMode == -1)
-				if (!packet.getBooleans().getFields().isEmpty())
-					this.actionBarMode = 1;
+			final PacketTypeCommon type = event.getPacketType();
+			Component component;
 
-				else if (!packet.getBytes().getFields().isEmpty())
-					this.actionBarMode = 2;
+			if (type == PacketType.Play.Server.SYSTEM_CHAT_MESSAGE) {
+				final WrapperPlayServerSystemChatMessage packet = new WrapperPlayServerSystemChatMessage(event);
 
-				else if (!packet.getChatTypes().getFields().isEmpty())
-					this.actionBarMode = 3;
-
-				else {
-					// Probably ways have changed
-					if (MinecraftVersion.newerThan(V.v1_21))
-						throw new FoException("Unknown way to find if chat packet is action bar, packet: " + packet.getHandle().getClass());
-
-					// Ignore and log the message
-				}
-
-			if (this.actionBarMode == 1) {
-				if (packet.getBooleans().read(0))
+				// Split apart these conditions to make this more readable
+				if (packet.isOverlay())
+					return;
+				if (packet.getType() != null && packet.getType() == ChatTypes.GAME_INFO)
 					return;
 
-			} else if (this.actionBarMode == 2) {
-				// Apparently 1.8.8 is reporting this as it wants
-				//if (packet.getBytes().read(0) == (byte) 1)
-				//	return;
+				component = packet.getMessage();
+			} else if (type == PacketType.Play.Server.CHAT_MESSAGE) {
+				final WrapperPlayServerChatMessage packet = new WrapperPlayServerChatMessage(event);
+				final ChatMessage message = packet.getMessage();
 
-			} else if (this.actionBarMode == 3)
-				if (packet.getChatTypes().read(0) == ChatType.GAME_INFO)
+				if (message.getType() == ChatTypes.GAME_INFO)
 					return;
 
-			// Cache booleans for faster performance: 0.3ms vs ~1ms
-			if (this.hasAdventure == null) {
-				this.hasAdventure = !event.getPacket().getModifier().withType(Component.class).getFields().isEmpty();
-				this.hasBungee = !event.getPacket().getModifier().withType(BaseComponent[].class).getFields().isEmpty();
-				this.hasIChatBase = !event.getPacket().getChatComponents().getFields().isEmpty();
+				component = message.getChatContent();
+			} else {
+				return; // Not a chat message
 			}
 
 			// Lock processing to one instance only to prevent another packet filtering
 			try {
 				this.processedPlayers.add(playerName);
 
-				final StructureModifier<Component> modifierAdventure = this.hasAdventure ? event.getPacket().getModifier().withType(Component.class) : null;
-				final StructureModifier<BaseComponent[]> modifierBaseComponent = this.hasBungee ? event.getPacket().getModifier().withType(BaseComponent[].class) : null;
-				final StructureModifier<WrappedChatComponent> modifierIChatBaseComponent = this.hasIChatBase ? event.getPacket().getChatComponents() : null;
-
-				String json = null;
 				final boolean legacy = MinecraftVersion.olderThan(V.v1_16);
-
-				if (this.hasAdventure) {
-					final Component component = modifierAdventure.read(0);
-
-					if (component != null)
-						json = SimpleComponent.fromAdventure(component).toAdventureJson(null, legacy);
-				}
-
-				if (json == null && !"".equals(json) && !"{}".equals(json) && this.hasBungee) {
-					final BaseComponent[] components = modifierBaseComponent.read(0);
-
-					if (components != null)
-						json = SimpleComponent.fromBungee(components, legacy).toAdventureJson(null, legacy);
-				}
-
-				if (json == null && !"".equals(json) && !"{}".equals(json) && this.hasIChatBase) {
-					final WrappedChatComponent chatComponent = modifierIChatBaseComponent.read(0);
-
-					if (chatComponent != null)
-						json = chatComponent.getJson();
-				}
+				String json = SimpleComponent.fromAdventure(component).toAdventureJson(null, legacy);
 
 				if (json != null && json.length() < 50_000) {
 
@@ -296,15 +254,18 @@ public abstract class PacketListener {
 					if (editJson) {
 						final Component newJson = GsonComponentSerializer.gson().deserialize(json);
 
-						if (!newJson.equals(oldJson))
-							if (this.hasAdventure)
-								modifierAdventure.write(0, newJson);
+						if (!newJson.equals(oldJson)) {
+							if (type == PacketType.Play.Server.SYSTEM_CHAT_MESSAGE) {
+								final WrapperPlayServerSystemChatMessage packet = new WrapperPlayServerSystemChatMessage(event);
+								packet.setMessage(newJson);
+							} else {
+								final WrapperPlayServerChatMessage packet = new WrapperPlayServerChatMessage(event);
+								final ChatMessage message = packet.getMessage();
 
-							else if (this.hasBungee)
-								modifierBaseComponent.write(0, BungeeComponentSerializer.get().serialize(newJson));
-
-							else if (this.hasIChatBase)
-								modifierIChatBaseComponent.write(0, WrappedChatComponent.fromJson(json));
+								message.setChatContent(newJson);
+								packet.setMessage(message);
+                            }
+						}
 					}
 				}
 
@@ -314,17 +275,17 @@ public abstract class PacketListener {
 		}
 
 		/**
-		 * Called when chat message packet is received.
-		 *
+		 * Called when the chat message packet is received.
+		 * <p>
 		 * If you edit the jsonMessage we do NOT set it back unless you call
 		 * {@link #editJson()} and set it to true.
+		 * <p>
+		 * To cancel the packet, throw {@link EventHandledException}
 		 *
-		 * To cancel cancel the packet, throw {@link EventHandledException}
+		 * @param player The player who sent the chat message.
+		 * @param json The JSON of the message component sent by the player.
 		 *
-		 * @param player
-		 * @param json
-		 *
-		 * @return
+		 * @return The new (edited) JSON message.
 		 */
 		protected String onJsonMessage(final Player player, final String json) {
 			return json;
@@ -332,9 +293,9 @@ public abstract class PacketListener {
 
 		/**
 		 * For performance purposes, json message in {@link #jsonMessage} is not edited by default
-		 * Return true to change this behavior.
+		 * Return true in order to call {@link #onJsonMessage(Player, String)}.
 		 *
-		 * @return
+		 * @return Whether to allow editing of the JSON message.
 		 */
 		protected boolean editJson() {
 			return false;
@@ -342,33 +303,36 @@ public abstract class PacketListener {
 	}
 
 	/**
-	 * A convenience class so that you don't have to specify which plugin is the owner of the packet adapter
+	 * A convenience class so that you don't have to specify which plugin is the owner of the packet adapter.
+	 * <p>
+	 * By default, PacketEvents doesn't allow you to register packet listeners for specific packet types, so we do a check manually.
+	 * This class has now become abstract so that you can extend it and implement your own packet handling logic.
 	 */
-	protected class SimpleAdapter extends PacketAdapter {
+	protected abstract class SimpleAdapter implements com.github.retrooper.packetevents.event.PacketListener {
 
 		/**
 		 * The packet we're listening for
 		 */
 		@Getter
-		private final PacketType type;
+		private final PacketTypeCommon type;
 
 		/**
 		 * Create a new packet adapter for the given packet type
 		 *
-		 * @param type
+		 * @param type The packet type to listen for. E.g. {@code PacketType.Play.Client.CHAT_COMMAND}.
 		 */
-		public SimpleAdapter(final PacketType type) {
-			this(ListenerPriority.NORMAL, type);
+		public SimpleAdapter(final PacketTypeCommon type) {
+			this(PacketListenerPriority.NORMAL, type);
 		}
 
 		/**
 		 * Create a new packet adapter for the given packet type with the given priority
 		 *
-		 * @param priority
-		 * @param type
+		 * @param priority The priority of the listener, see {@link PacketListenerPriority}.
+		 * @param type The packet type to listen for. E.g. {@code PacketType.Play.Client.CHAT_COMMAND}.
 		 */
-		public SimpleAdapter(final ListenerPriority priority, final PacketType type) {
-			super(BukkitPlugin.getInstance(), priority, type);
+		public SimpleAdapter(final PacketListenerPriority priority, final PacketTypeCommon type) {
+			PacketEvents.getAPI().getEventManager().registerListener(this, priority);
 
 			this.type = type;
 		}
@@ -376,21 +340,33 @@ public abstract class PacketListener {
 		/**
 		 * This method is automatically fired when the client sends the {@link #type} to the server.
 		 *
-		 * @param event
+		 * @param event The packet receive event.
 		 */
 		@Override
-		public void onPacketReceiving(final PacketEvent event) {
-			throw new FoException("Override onPacketReceiving to handle receiving client>server packet type " + this.type);
+		public void onPacketReceive(@NotNull final PacketReceiveEvent event) {
+			if (event.getPacketType() == this.type) {
+				this.onPacketReceiving(event);
+			}
+		}
+
+		public void onPacketReceiving(PacketReceiveEvent event) {
+			throw new FoException("Override onPacketReceiving to handle sending client>server packet type " + this.type);
+		};
+
+		public void onPacketSending(PacketSendEvent event) {
+			throw new FoException("Override onPacketReceiving to handle sending server>client packet type " + this.type);
 		}
 
 		/**
 		 * This method is automatically fired when the server wants to send the {@link #type} to the client.
 		 *
-		 * @param event
+		 * @param event The packet send event.
 		 */
 		@Override
-		public void onPacketSending(final PacketEvent event) {
-			throw new FoException("Override onPacketReceiving to handle sending server>client packet type " + this.type);
+		public void onPacketSend(@NotNull final PacketSendEvent event) {
+			if (event.getPacketType() == this.type) {
+				this.onPacketSending(event);
+			}
 		}
 	}
 }

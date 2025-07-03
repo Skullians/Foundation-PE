@@ -1641,7 +1641,7 @@ public final class Remain {
 	}
 
 	/**
-	 * Opens the sign for the player. On legacy versions, ProtocolLib is
+	 * Opens the sign for the player. On legacy versions, PacketEvents is
 	 * required to save the edits to the sign after updating it.
 	 *
 	 * @param player

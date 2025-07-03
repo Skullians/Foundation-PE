@@ -1,20 +1,24 @@
 package org.mineacademy.fo.platform;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.recipe.data.MerchantOffer;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientCreativeInventoryAction;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerMerchantOffers;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerWindowItems;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MerchantRecipe;
 import org.mineacademy.fo.MinecraftVersion;
 import org.mineacademy.fo.MinecraftVersion.V;
 import org.mineacademy.fo.annotation.AutoRegister;
 import org.mineacademy.fo.enchant.SimpleEnchantment;
+import org.mineacademy.fo.model.HookManager;
 import org.mineacademy.fo.model.PacketListener;
 import org.mineacademy.fo.remain.CompItemFlag;
 import org.mineacademy.fo.remain.CompMaterial;
-
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.reflect.StructureModifier;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -44,95 +48,74 @@ final class BukkitEnchantPacketListener extends PacketListener {
 		// Ex:
 		//   BlackNova II (fake lore)
 		//   BlackNova I  (actual lore of the item)
-		this.addReceivingListener(PacketType.Play.Client.SET_CREATIVE_SLOT, event -> {
-			final PacketContainer packet = event.getPacket();
-			final ItemStack item = packet.getItemModifier().readSafely(0);
+		this.addReceivingListener(PacketType.Play.Client.CREATIVE_INVENTORY_ACTION, event -> {
+			final WrapperPlayClientCreativeInventoryAction packet = new WrapperPlayClientCreativeInventoryAction(event);
+			final ItemStack item = (ItemStack) HookManager.toBukkitItemStack(packet.getItemStack());
 
 			if (item != null && !CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
 				final ItemStack newItem = SimpleEnchantment.removeEnchantmentLores(item);
 
+				// I don't like this casting; however, we have the utility methods in HookManager which have the checks for PacketEvents.
+				// I mainly created them because of converting List<ItemStack>s, but wanted to stick with conventions.
 				if (newItem != null)
-					packet.getItemModifier().write(0, newItem);
+					packet.setItemStack((com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(newItem));
 			}
 		});
 
 		// Auto placement of our lore when items are custom enchanted
 		this.addSendingListener(PacketType.Play.Server.SET_SLOT, event -> {
-			final StructureModifier<ItemStack> itemModifier = event.getPacket().getItemModifier();
-			ItemStack item = itemModifier.read(0);
+			final WrapperPlayServerSetSlot packet = new WrapperPlayServerSetSlot(event);
+			ItemStack item = (ItemStack) HookManager.toBukkitItemStack(packet.getItem());
 
 			if (item != null && !CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
 				item = SimpleEnchantment.addEnchantmentLores(item);
 
 				// Write the item
 				if (item != null)
-					itemModifier.write(0, item);
+					packet.setItem((com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(item));
 			}
 		});
 
 		this.addSendingListener(PacketType.Play.Server.WINDOW_ITEMS, event -> {
-			final PacketContainer packet = event.getPacket();
+			final WrapperPlayServerWindowItems packet = new WrapperPlayServerWindowItems(event);
 
 			// for older versions, this is not needed because I believe they use an array
-			final StructureModifier<List<ItemStack>> itemListModifier = packet.getItemListModifier();
-			for (int i = 0; i < itemListModifier.size(); i++) {
-				final List<ItemStack> itemStacks = itemListModifier.read(i);
-				if (itemStacks != null) {
-					boolean changed = false;
-					final int size = itemStacks.size();
-					for (int j = 0; j < size; j++) {
+			final List<ItemStack> itemStacks = packet.getItems().stream()
+					.map(HookManager::toBukkitItemStack)
+					.collect(Collectors.toList());
+			if (itemStacks != null) {
+				boolean changed = false;
+				final int size = itemStacks.size();
+				for (int j = 0; j < size; j++) {
 
-						ItemStack item = itemStacks.get(j);
-						if (item != null && !CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
-							item = SimpleEnchantment.addEnchantmentLores(item);
+					ItemStack item = itemStacks.get(j);
+					if (item != null && !CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
+						item = SimpleEnchantment.addEnchantmentLores(item);
 
-							if (item == null)
-								continue;
+						if (item == null)
+							continue;
 
-							itemStacks.set(j, item);
-							changed = true;
-						}
+						itemStacks.set(j, item);
+						changed = true;
 					}
-					if (changed)
-						itemListModifier.write(i, itemStacks);
 				}
-			}
-
-			// Not needed for 1.13+ since they changed it to a list according to someone on the spigot forum
-			// Though, why not
-			final StructureModifier<ItemStack[]> itemArrayModifier = packet.getItemArrayModifier();
-			for (int i = 0; i < itemArrayModifier.size(); i++) {
-				final ItemStack[] itemStacks = itemArrayModifier.read(i);
-				if (itemStacks != null) {
-					boolean changed = false;
-
-					for (int j = 0; j < itemStacks.length; j++) {
-						ItemStack item = itemStacks[j];
-						if (item != null && !CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
-							item = SimpleEnchantment.addEnchantmentLores(item);
-							if (item == null)
-								continue;
-
-							itemStacks[j] = item;
-							changed = true;
-						}
-					}
-					if (changed)
-						itemArrayModifier.write(i, itemStacks);
-				}
+				if (changed)
+					packet.setItems(itemStacks.stream()
+							.map(item -> (com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(item))
+							.collect(Collectors.toList()));
 			}
 		});
 
 		if (MinecraftVersion.atLeast(V.v1_9))
-			this.addSendingListener(PacketType.Play.Server.OPEN_WINDOW_MERCHANT, event -> {
-				final PacketContainer packet = event.getPacket();
-				final List<MerchantRecipe> ls = packet.getMerchantRecipeLists().read(0);
+			this.addSendingListener(PacketType.Play.Server.MERCHANT_OFFERS, event -> {
+				final WrapperPlayServerMerchantOffers packet = new WrapperPlayServerMerchantOffers(event);
+				final List<MerchantOffer> offers = packet.getMerchantOffers();
 
 				boolean changed = false;
 
-				for (int i = 0; i < ls.size(); i++) {
-					final MerchantRecipe recipe = ls.get(i);
-					ItemStack item = recipe.getResult();
+				for (int i = 0; i < offers.size(); i++) {
+					final MerchantOffer offer = offers.get(i);
+					ItemStack item = HookManager.toBukkitItemStack(offer.getOutputItem());
 
 					if (!CompMaterial.isAir(item.getType()) && !CompItemFlag.HIDE_ENCHANTS.has(item)) {
 						item = SimpleEnchantment.addEnchantmentLores(item);
@@ -140,17 +123,15 @@ final class BukkitEnchantPacketListener extends PacketListener {
 						if (item == null)
 							continue;
 
-						final MerchantRecipe newRecipe = new MerchantRecipe(item, recipe.getUses(), recipe.getMaxUses(), recipe.hasExperienceReward(), recipe.getVillagerExperience(), recipe.getPriceMultiplier());
-						newRecipe.setIngredients(recipe.getIngredients());
-
-						ls.set(i, newRecipe);
+						offer.setOutputItem((com.github.retrooper.packetevents.protocol.item.ItemStack) HookManager.fromBukkitItemStack(item));
+						offers.set(i, offer);
 
 						changed = true;
 					}
 				}
 
 				if (changed)
-					packet.getMerchantRecipeLists().write(0, ls);
+					packet.setMerchantOffers(offers);
 			});
 	}
 }
