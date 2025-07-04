@@ -285,7 +285,7 @@ public abstract class PacketListener {
 		 * @param player The player who sent the chat message.
 		 * @param json The JSON of the message component sent by the player.
 		 *
-		 * @return The new (edited) JSON message.
+		 * @return
 		 */
 		protected String onJsonMessage(final Player player, final String json) {
 			return json;
@@ -295,7 +295,7 @@ public abstract class PacketListener {
 		 * For performance purposes, json message in {@link #jsonMessage} is not edited by default
 		 * Return true in order to call {@link #onJsonMessage(Player, String)}.
 		 *
-		 * @return Whether to allow editing of the JSON message.
+		 * @return
 		 */
 		protected boolean editJson() {
 			return false;
