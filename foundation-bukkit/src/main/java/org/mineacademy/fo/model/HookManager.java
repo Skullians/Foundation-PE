@@ -270,7 +270,7 @@ public final class HookManager {
 		if (Platform.isPluginInstalled("PremiumVanish"))
 			premiumVanishHook = new PremiumVanishHook();
 
-		if (Platform.isPluginInstalled("PacketEvents"))
+		if (Platform.isPluginInstalled("packetevents"))
 
 			// Also check if the library is loaded properly.
 			try {

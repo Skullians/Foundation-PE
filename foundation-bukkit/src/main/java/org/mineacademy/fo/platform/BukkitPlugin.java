@@ -364,7 +364,7 @@ public abstract class BukkitPlugin extends JavaPlugin implements Listener, Found
 
 							BukkitPlugin.this.registerEvents(SimpleEnchantment.Listener.getInstance());
 
-							if (Bukkit.getPluginManager().getPlugin("PacketEvents") != null)
+							if (Bukkit.getPluginManager().getPlugin("packetevents") != null)
 								BukkitEnchantPacketListener.getInstance().onRegister();
 							else
 								CommonCore.warning("Custom enchantments require PacketEvents for lore to be added properly.");
