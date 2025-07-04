@@ -126,7 +126,7 @@ public abstract class PacketListener {
 			public void onPacketReceive(@NotNull final PacketReceiveEvent event) {
 				if (type == PacketType.Play.Server.CHAT_MESSAGE || type == PacketType.Play.Client.CHAT_MESSAGE) { // todo, check
 					// Packet can be both sided
-				} else
+				} else if (event.getPlayer() != null)
 					super.onPacketReceiving(event);
 			}
 		});
@@ -197,6 +197,8 @@ public abstract class PacketListener {
 		@Override
 		public void onPacketSend(final PacketSendEvent event) {
 			final Player player = event.getPlayer();
+			if (player == null) return; // Since this event is fired, even during the connection state, player may be null
+
 			final String playerName = player.getName();
 
 			// Ignore dummy instances and disabled plugin or processed players
